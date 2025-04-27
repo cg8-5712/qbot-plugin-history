@@ -41,12 +41,61 @@ class HistoryService:
     _data_dir = Path(PLUGIN_DATA_PATH) / "history"
 
     @classmethod
+    def _maintain_cache(cls) -> None:
+        """维护缓存文件，只保留最近指定天数的内容"""
+        try:
+            cache_time = Config.get_config("history", "CACHE_TIME", 7)
+            # 如果缓存时间为0，表示永久保存
+            if cache_time == 0:
+                return
+
+            if not cls._data_dir.exists():
+                return
+
+            current_time = datetime.now()
+            for month_dir in cls._data_dir.iterdir():
+                if not month_dir.is_dir():
+                    continue
+
+                for cache_file in month_dir.iterdir():
+                    try:
+                        # 从文件名解析日期（格式：dd.txt）
+                        day = int(cache_file.stem)
+                        file_date = datetime(
+                            current_time.year,
+                            int(month_dir.name),
+                            day
+                        )
+
+                        # 计算日期差
+                        days_diff = (current_time - file_date).days
+                        if days_diff > cache_time:
+                            cache_file.unlink()
+                            logger.info(
+                                "清理过期缓存文件",
+                                "历史上的今天",
+                                target=str(cache_file)
+                            )
+                    except ValueError:
+                        continue
+        except Exception as e:
+            logger.error(
+                "维护缓存失败",
+                "历史上的今天",
+                e=e
+            )
+
+    @classmethod
     async def get_events(cls) -> Tuple[List[HistoryEvent], List[HistoryEvent]]:
         """获取历史事件"""
+        # 维护缓存文件
+        cls._maintain_cache()
+
         cache_path = cls._get_cache_path()
         if cache_path.exists():
             logger.info("从缓存读取历史事件", "历史上的今天")
             return cls._read_from_cache(cache_path)
+        # 后续代码保持不变...
 
         logger.info("开始从网页获取历史事件", "历史上的今天")
         events = await cls._fetch_from_web()
@@ -233,7 +282,7 @@ class HistoryService:
                 stream=False,
                 messages=[{
                     "role": "user",
-                    "content": f"请判断内容是否与航空/民航/计算机领域有关，"\
+                    "content": f"请判断内容是否与航空/民航/计算机领域有关，"
                               f"有关回复1，无关回复0。无需其他内容{event.content}"
                 }]
             )
@@ -270,6 +319,18 @@ class HistoryService:
     @staticmethod
     def get_subscribe_groups() -> List[int]:
         """获取订阅群组列表"""
-        groups = Config.get("history")
-        return groups
-
+        try:
+            subscribe_groups = Config.get_config("history", "SUBSCRIBE_GROUPS", [])
+            logger.info(
+                "获取订阅群组列表成功",
+                "历史上的今天",
+                target={"群组数": len(subscribe_groups)}
+            )
+            return subscribe_groups
+        except Exception as e:
+            logger.error(
+                "获取订阅群组列表失败",
+                "历史上的今天",
+                e=e
+            )
+            return []

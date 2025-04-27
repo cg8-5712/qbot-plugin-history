@@ -74,11 +74,6 @@ Config.add_plugin_config(
     type=list
 )
 
-cache_time = Config.get_config("history", "CACHE_TIME", 7)
-subscribe_groups = Config.get_config("history", "SUBSCRIBE_GROUPS", [])
-print(cache_time)
-print(subscribe_groups)
-
 HistoryCommand = on_command(
     "历史上的今天",
     rule=to_me(),
